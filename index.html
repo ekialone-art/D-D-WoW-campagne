@@ -1,33 +1,559 @@
 <!DOCTYPE html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>D&D 3.5 Companion</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
     <style>
-      body {
-        font-family: 'Lato', sans-serif;
-        background-color: #1a1b1e;
-        color: #e5e7eb;
-      }
-      h1, h2, h3, h4, h5, h6 {
-        font-family: 'Cinzel', serif;
-      }
+        body { font-family: 'Lato', sans-serif; background-color: #111215; color: #e5e7eb; }
+        h1, h2, h3, h4, h5, h6 { font-family: 'Cinzel', serif; }
+        /* Utilitaires */
+        .scrollbar-thin::-webkit-scrollbar { height: 6px; width: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: #1f2937; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
-  }
-}
-</script>
 </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<body>
+    <div id="app" class="min-h-screen pb-20"></div>
+
+    <!-- Modale pour créer un sort (cachée par défaut) -->
+    <div id="spell-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-md w-full border border-gray-600 flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-gray-700">
+                <h3 class="text-xl font-bold text-white">Nouveau Sort Maison</h3>
+            </div>
+            <form id="spell-form" class="p-4 space-y-4 overflow-y-auto">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Nom du sort</label>
+                    <input type="text" name="name" required class="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white focus:border-purple-500 outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Niveau</label>
+                        <input type="number" name="level" min="0" max="9" value="1" class="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white focus:border-purple-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">École</label>
+                        <select name="school" class="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white focus:border-purple-500 outline-none">
+                            <option>Abjuration</option><option>Invocation</option><option>Divination</option>
+                            <option>Enchantement</option><option>Évocation</option><option>Illusion</option>
+                            <option>Nécromancie</option><option>Transmutation</option><option value="Universelle" selected>Universelle</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Dégâts / Effet</label>
+                    <input type="text" name="damage" placeholder="ex: 1d6/niv" class="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white focus:border-purple-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <textarea name="description" rows="3" class="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white focus:border-purple-500 outline-none resize-none"></textarea>
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="dndApp.closeModal()" class="flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors">Annuler</button>
+                    <button type="submit" class="flex-1 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded transition-colors">Créer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- CONSTANTS & ICONS ---
+        const ICONS = {
+            shield: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+            users: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+            plus: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`,
+            minus: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>`,
+            trash: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`,
+            heart: `<svg class="text-red-500" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`,
+            arrow: `<svg class="text-yellow-500" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>`,
+            crosshair: `<svg class="text-orange-500" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>`,
+            disc: `<svg class="text-gray-400" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>`,
+            potion: `<svg class="text-blue-400" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 2h7"/><path d="M12 2v4"/><path d="M7 6h10l-1.5 5.5a5.5 5.5 0 0 1-5.5 5.5 5.5 5.5 0 0 1-5.5-5.5L7 6Z"/></svg>`,
+            wand: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h0"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/></svg>`,
+            chevronDown: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
+            chevronUp: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>`,
+            check: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
+            x: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`
+        };
+
+        const INITIAL_SPELLS = [
+            { id: 's1', name: 'Projectile Magique', level: 1, school: 'Évocation', description: '2d4+2 dégâts de force.', damage: '2d4+2' },
+            { id: 's2', name: 'Armure de Mage', level: 1, school: 'Abjuration', description: '+4 CA.', damage: '-' },
+            { id: 's3', name: 'Boule de Feu', level: 3, school: 'Évocation', description: '1d6 dégâts par niveau.', damage: '1d6/niv' },
+            { id: 's4', name: 'Soins Légers', level: 1, school: 'Invocation', description: 'Soigne 1d8+1.', damage: 'Heal 1d8+1' },
+            { id: 's5', name: 'Lumière', level: 0, school: 'Évocation', description: 'Illumine un objet.', damage: '-' },
+            { id: 's6', name: 'Détection de la Magie', level: 0, school: 'Divination', description: 'Détecte les auras magiques.', damage: '-' },
+        ];
+
+        // --- STATE MANAGEMENT ---
+        const dndApp = {
+            state: {
+                characters: [],
+                activeCharId: null,
+                activeTab: 'status',
+                selectedSpellLevel: 1,
+                expandedSpellId: null,
+                globalSpells: [...INITIAL_SPELLS],
+                showCharDropdown: false
+            },
+
+            init() {
+                // Load from LocalStorage
+                const savedChars = localStorage.getItem('dnd35_characters');
+                const savedSpells = localStorage.getItem('dnd35_custom_spells');
+
+                if (savedChars) {
+                    this.state.characters = JSON.parse(savedChars);
+                    if (this.state.characters.length > 0) {
+                        this.state.activeCharId = this.state.characters[0].id;
+                    }
+                }
+
+                if (savedSpells) {
+                    const customSpells = JSON.parse(savedSpells);
+                    // Merge avoiding duplicates
+                    customSpells.forEach(s => {
+                        if (!this.state.globalSpells.find(gs => gs.id === s.id)) {
+                            this.state.globalSpells.push(s);
+                        }
+                    });
+                }
+
+                // Bind Form
+                document.getElementById('spell-form').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.createSpell(new FormData(e.target));
+                });
+
+                this.render();
+            },
+
+            save() {
+                localStorage.setItem('dnd35_characters', JSON.stringify(this.state.characters));
+                const customSpells = this.state.globalSpells.filter(s => s.isCustom);
+                localStorage.setItem('dnd35_custom_spells', JSON.stringify(customSpells));
+                this.render();
+            },
+
+            getActiveChar() {
+                return this.state.characters.find(c => c.id === this.state.activeCharId);
+            },
+
+            // --- ACTIONS ---
+
+            createCharacter() {
+                const newChar = {
+                    id: `char-${Date.now()}`,
+                    name: `Personnage ${this.state.characters.length + 1}`,
+                    level: 1,
+                    hp: { current: 10, max: 10 },
+                    consumables: { arrows: 20, bolts: 10, bullets: 10, potions: 0 },
+                    spellSlots: {}, // { 0: { total: 0, used: 0 } }
+                    knownSpells: [],
+                    skills: []
+                };
+                this.state.characters.push(newChar);
+                this.state.activeCharId = newChar.id;
+                this.state.showCharDropdown = false;
+                this.save();
+            },
+
+            selectCharacter(id) {
+                this.state.activeCharId = id;
+                this.state.showCharDropdown = false;
+                this.render();
+            },
+
+            deleteCharacter(id, e) {
+                if (e) e.stopPropagation();
+                if (!confirm("Supprimer ce personnage ?")) return;
+                
+                this.state.characters = this.state.characters.filter(c => c.id !== id);
+                if (this.state.activeCharId === id) {
+                    this.state.activeCharId = this.state.characters.length > 0 ? this.state.characters[0].id : null;
+                }
+                this.save();
+            },
+
+            updateCharacterField(field, value) {
+                const char = this.getActiveChar();
+                if (!char) return;
+                
+                if (field === 'name') char.name = value;
+                if (field === 'level') char.level = parseInt(value) || 1;
+                this.save();
+            },
+
+            updateHP(current, max) {
+                const char = this.getActiveChar();
+                if (!char) return;
+                char.hp.current = current;
+                char.hp.max = max;
+                this.save();
+            },
+
+            updateConsumable(key, delta) {
+                const char = this.getActiveChar();
+                if (!char) return;
+                char.consumables[key] = Math.max(0, char.consumables[key] + delta);
+                this.save();
+            },
+
+            setTab(tab) {
+                this.state.activeTab = tab;
+                this.render();
+            },
+
+            toggleDropdown() {
+                this.state.showCharDropdown = !this.state.showCharDropdown;
+                this.render();
+            },
+
+            // Spell Actions
+            setSpellLevel(lvl) {
+                this.state.selectedSpellLevel = lvl;
+                this.render();
+            },
+
+            updateSpellSlot(type, delta) {
+                const char = this.getActiveChar();
+                const lvl = this.state.selectedSpellLevel;
+                if (!char.spellSlots[lvl]) char.spellSlots[lvl] = { total: 0, used: 0 };
+                
+                char.spellSlots[lvl][type] = Math.max(0, char.spellSlots[lvl][type] + delta);
+                this.save();
+            },
+
+            toggleKnownSpell(spellId) {
+                const char = this.getActiveChar();
+                const index = char.knownSpells.indexOf(spellId);
+                if (index > -1) char.knownSpells.splice(index, 1);
+                else char.knownSpells.push(spellId);
+                this.save();
+            },
+
+            toggleExpandSpell(spellId) {
+                this.state.expandedSpellId = this.state.expandedSpellId === spellId ? null : spellId;
+                this.render();
+            },
+
+            openModal() {
+                document.getElementById('spell-modal').classList.replace('hidden', 'flex');
+            },
+
+            closeModal() {
+                document.getElementById('spell-modal').classList.replace('flex', 'hidden');
+                document.getElementById('spell-form').reset();
+            },
+
+            createSpell(formData) {
+                const newSpell = {
+                    id: `custom-${Date.now()}`,
+                    name: formData.get('name'),
+                    level: parseInt(formData.get('level')),
+                    school: formData.get('school'),
+                    damage: formData.get('damage'),
+                    description: formData.get('description'),
+                    isCustom: true
+                };
+                this.state.globalSpells.push(newSpell);
+                
+                // Auto add to known for current char
+                const char = this.getActiveChar();
+                if (char) char.knownSpells.push(newSpell.id);
+                
+                this.closeModal();
+                this.save();
+            },
+
+            // Skill Actions
+            addSkill() {
+                const input = document.getElementById('new-skill-input');
+                const name = input.value.trim();
+                if (!name) return;
+                
+                const char = this.getActiveChar();
+                char.skills.push({ id: Date.now().toString(), name, ranks: 0 });
+                input.value = '';
+                this.save();
+            },
+
+            removeSkill(skillId) {
+                const char = this.getActiveChar();
+                char.skills = char.skills.filter(s => s.id !== skillId);
+                this.save();
+            },
+
+            updateSkillRank(skillId, rank) {
+                const char = this.getActiveChar();
+                const skill = char.skills.find(s => s.id === skillId);
+                if (skill) skill.ranks = rank;
+                this.save();
+            },
+
+            // --- RENDER FUNCTIONS ---
+            
+            render() {
+                const app = document.getElementById('app');
+                const char = this.getActiveChar();
+
+                let html = `
+                    <header class="bg-gray-900 border-b border-gray-800 p-4 sticky top-0 z-40 shadow-md">
+                        <div class="max-w-3xl mx-auto flex justify-between items-center">
+                            <h1 class="text-xl md:text-2xl font-bold text-gray-100 flex items-center gap-2">
+                                <span class="text-red-600">${ICONS.shield}</span>
+                                <span class="hidden sm:inline">D&D 3.5 Companion</span>
+                                <span class="sm:hidden">D&D 3.5</span>
+                            </h1>
+                            
+                            <div class="relative">
+                                <button onclick="dndApp.toggleDropdown()" class="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-700 transition-colors">
+                                    ${ICONS.users}
+                                    <span class="max-w-[100px] truncate font-medium">
+                                        ${char ? char.name : 'Sélectionner'}
+                                    </span>
+                                </button>
+                                
+                                ${this.state.showCharDropdown ? `
+                                    <div class="absolute right-0 top-full mt-2 w-56 bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-1 z-50">
+                                        ${this.state.characters.map(c => `
+                                            <div class="flex justify-between items-center p-2 rounded cursor-pointer hover:bg-gray-700 ${c.id === this.state.activeCharId ? 'bg-gray-700 text-blue-400' : 'text-gray-300'}" onclick="dndApp.selectCharacter('${c.id}')">
+                                                <span>${c.name}</span>
+                                                <button onclick="dndApp.deleteCharacter('${c.id}', event)" class="text-gray-500 hover:text-red-500 p-1">${ICONS.trash}</button>
+                                            </div>
+                                        `).join('')}
+                                        <button onclick="dndApp.createCharacter()" class="w-full text-left p-2 text-green-400 hover:bg-gray-700 rounded flex items-center gap-2 text-sm mt-1 border-t border-gray-700">
+                                            ${ICONS.plus} Nouveau Personnage
+                                        </button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </header>
+                `;
+
+                if (!char) {
+                    html += `
+                        <div class="flex flex-col items-center justify-center h-[60vh] text-gray-500 max-w-3xl mx-auto p-4">
+                            <div class="opacity-50 scale-150 mb-6">${ICONS.shield}</div>
+                            <h2 class="text-xl font-bold mb-2 text-gray-300">Aucun personnage sélectionné</h2>
+                            <p class="mb-6 text-center max-w-xs">Créez ou sélectionnez un personnage pour commencer.</p>
+                            <button onclick="dndApp.createCharacter()" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-bold transition-transform active:scale-95 shadow-lg">
+                                Créer un Personnage
+                            </button>
+                        </div>
+                    `;
+                    app.innerHTML = html;
+                    return;
+                }
+
+                // Main Content
+                html += `<main class="max-w-3xl mx-auto p-4 fade-in">`;
+
+                // Header Info
+                html += `
+                    <div class="mb-6 flex gap-4 items-end bg-gray-800/50 p-4 rounded-lg border border-gray-800">
+                        <div class="flex-1">
+                            <label class="text-xs text-gray-500 uppercase font-bold tracking-wider">Nom</label>
+                            <input type="text" value="${char.name}" onchange="dndApp.updateCharacterField('name', this.value)" 
+                                class="w-full bg-transparent border-b border-gray-700 text-2xl font-bold text-white focus:border-blue-500 focus:outline-none py-1 transition-colors">
+                        </div>
+                         <div class="w-24">
+                            <label class="text-xs text-gray-500 uppercase font-bold tracking-wider">Niveau</label>
+                            <input type="number" value="${char.level}" onchange="dndApp.updateCharacterField('level', this.value)"
+                                class="w-full bg-transparent border-b border-gray-700 text-xl font-bold text-white focus:border-blue-500 focus:outline-none py-1 text-center transition-colors">
+                        </div>
+                    </div>
+                `;
+
+                // Tabs
+                html += `
+                    <div class="flex mb-6 bg-gray-900/50 p-1 rounded-lg">
+                        <button onclick="dndApp.setTab('status')" class="flex-1 py-2 text-sm font-bold rounded-md transition-all ${this.state.activeTab === 'status' ? 'bg-gray-700 text-white shadow' : 'text-gray-500 hover:text-gray-300'}">Général</button>
+                        <button onclick="dndApp.setTab('spells')" class="flex-1 py-2 text-sm font-bold rounded-md transition-all ${this.state.activeTab === 'spells' ? 'bg-purple-900/50 text-purple-200 shadow' : 'text-gray-500 hover:text-gray-300'}">Sorts</button>
+                        <button onclick="dndApp.setTab('skills')" class="flex-1 py-2 text-sm font-bold rounded-md transition-all ${this.state.activeTab === 'skills' ? 'bg-blue-900/50 text-blue-200 shadow' : 'text-gray-500 hover:text-gray-300'}">Compétences</button>
+                    </div>
+                `;
+
+                // Content
+                html += `<div class="space-y-6">`;
+                
+                if (this.state.activeTab === 'status') {
+                    html += this.renderStatus(char);
+                } else if (this.state.activeTab === 'spells') {
+                    html += this.renderSpells(char);
+                } else {
+                    html += this.renderSkills(char);
+                }
+                
+                html += `</div></main>`;
+                app.innerHTML = html;
+            },
+
+            renderStatus(char) {
+                const hpPercent = Math.max(0, Math.min(100, (char.hp.current / char.hp.max) * 100));
+                const hpColor = hpPercent > 66 ? 'bg-green-600' : hpPercent > 33 ? 'bg-yellow-600' : 'bg-red-600';
+
+                return `
+                    <!-- Health -->
+                    <div class="bg-gray-800 p-4 rounded-lg shadow-md border border-gray-700">
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="text-lg font-bold flex items-center gap-2">${ICONS.heart} Points de Vie</h3>
+                            <div class="flex items-center gap-2">
+                                <input type="number" value="${char.hp.current}" onchange="dndApp.updateHP(parseInt(this.value), ${char.hp.max})" class="w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-white">
+                                <span class="text-gray-400">/</span>
+                                <input type="number" value="${char.hp.max}" onchange="dndApp.updateHP(${char.hp.current}, parseInt(this.value))" class="w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-white">
+                            </div>
+                        </div>
+                        <div class="w-full bg-gray-900 rounded-full h-6 border border-gray-600 relative overflow-hidden">
+                            <div class="h-full transition-all duration-500 ease-out ${hpColor}" style="width: ${hpPercent}%"></div>
+                            <div class="absolute inset-0 flex items-center justify-center text-xs font-bold shadow-sm">${hpPercent.toFixed(0)}%</div>
+                        </div>
+                        <div class="flex justify-center gap-4 mt-4">
+                            <button onclick="dndApp.updateHP(${Math.max(0, char.hp.current - 1)}, ${char.hp.max})" class="p-2 bg-red-900/50 hover:bg-red-800 rounded-full border border-red-700 transition-colors">${ICONS.minus}</button>
+                            <button onclick="dndApp.updateHP(${Math.min(char.hp.max, char.hp.current + 1)}, ${char.hp.max})" class="p-2 bg-green-900/50 hover:bg-green-800 rounded-full border border-green-700 transition-colors">${ICONS.plus}</button>
+                        </div>
+                    </div>
+
+                    <h3 class="text-lg font-bold text-gray-400 mt-8 mb-4 border-b border-gray-800 pb-2">Consommables</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${this.renderConsumableCard('arrows', 'Flèches (Arc)', ICONS.arrow, char.consumables.arrows)}
+                        ${this.renderConsumableCard('bolts', 'Carreaux (Arbalète)', ICONS.crosshair, char.consumables.bolts)}
+                        ${this.renderConsumableCard('bullets', 'Billes (Fronde)', ICONS.disc, char.consumables.bullets)}
+                        ${this.renderConsumableCard('potions', 'Potions', ICONS.potion, char.consumables.potions)}
+                    </div>
+                `;
+            },
+
+            renderConsumableCard(key, label, icon, value) {
+                return `
+                    <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 flex flex-col justify-between">
+                        <div class="flex items-center gap-2 mb-3">
+                            ${icon} <span class="font-semibold text-gray-200">${label}</span>
+                        </div>
+                        <div class="flex items-center justify-between bg-gray-900 rounded-lg p-2">
+                            <button onclick="dndApp.updateConsumable('${key}', -1)" class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-colors">${ICONS.minus}</button>
+                            <span class="text-xl font-bold font-mono">${value}</span>
+                            <button onclick="dndApp.updateConsumable('${key}', 1)" class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-colors">${ICONS.plus}</button>
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderSpells(char) {
+                const lvl = this.state.selectedSpellLevel;
+                const slot = char.spellSlots[lvl] || { total: 0, used: 0 };
+                const spells = this.state.globalSpells.filter(s => s.level === lvl);
+
+                return `
+                    <!-- Level Selector -->
+                    <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                        ${Array.from({length: 10}, (_, i) => `
+                            <button onclick="dndApp.setSpellLevel(${i})" class="flex-shrink-0 px-4 py-2 rounded-lg font-bold transition-all ${lvl === i ? 'bg-purple-600 text-white ring-2 ring-purple-400' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}">Niv ${i}</button>
+                        `).join('')}
+                    </div>
+
+                    <!-- Slots -->
+                    <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                        <h3 class="text-lg font-bold mb-4 text-purple-300 flex items-center gap-2">${ICONS.wand} Emplacements (Niv ${lvl})</h3>
+                        <div class="flex items-center gap-8 justify-center bg-gray-900 p-4 rounded-lg">
+                            <div class="text-center">
+                                <label class="block text-xs text-gray-500 mb-1">DISPONIBLES</label>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="dndApp.updateSpellSlot('total', -1)" class="p-1 bg-gray-700 rounded hover:bg-gray-600">${ICONS.minus}</button>
+                                    <span class="text-2xl font-mono w-8 text-center">${slot.total}</span>
+                                    <button onclick="dndApp.updateSpellSlot('total', 1)" class="p-1 bg-gray-700 rounded hover:bg-gray-600">${ICONS.plus}</button>
+                                </div>
+                            </div>
+                            <div class="h-10 w-px bg-gray-700"></div>
+                            <div class="text-center">
+                                <label class="block text-xs text-gray-500 mb-1">UTILISÉS</label>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="dndApp.updateSpellSlot('used', -1)" class="p-1 bg-gray-700 rounded hover:bg-gray-600">${ICONS.minus}</button>
+                                    <span class="text-2xl font-mono w-8 text-center ${slot.used >= slot.total && slot.total > 0 ? 'text-red-500' : 'text-blue-400'}">${slot.used}</span>
+                                    <button onclick="dndApp.updateSpellSlot('used', 1)" class="p-1 bg-gray-700 rounded hover:bg-gray-600">${ICONS.plus}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- List -->
+                    <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+                        <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
+                            <h3 class="text-lg font-bold text-gray-200">Grimoire</h3>
+                            <button onclick="dndApp.openModal()" class="text-sm bg-purple-700 hover:bg-purple-600 text-white px-3 py-1.5 rounded flex items-center gap-1 transition-colors">
+                                ${ICONS.plus} Créer Sort
+                            </button>
+                        </div>
+                        <div class="divide-y divide-gray-700 max-h-[500px] overflow-y-auto">
+                            ${spells.length === 0 ? `<div class="p-8 text-center text-gray-500 italic">Aucun sort trouvé pour ce niveau.</div>` : ''}
+                            ${spells.map(spell => {
+                                const isKnown = char.knownSpells.includes(spell.id);
+                                const isExpanded = this.state.expandedSpellId === spell.id;
+                                return `
+                                    <div class="transition-colors ${isKnown ? 'bg-purple-900/10' : 'bg-transparent'}">
+                                        <div class="p-3 flex items-center gap-3">
+                                            <input type="checkbox" ${isKnown ? 'checked' : ''} onchange="dndApp.toggleKnownSpell('${spell.id}')" class="w-5 h-5 rounded border-gray-600 text-purple-600 focus:ring-purple-500 bg-gray-700 accent-purple-600">
+                                            <div class="flex-1 cursor-pointer" onclick="dndApp.toggleExpandSpell('${spell.id}')">
+                                                <div class="flex justify-between items-center">
+                                                    <span class="font-medium ${isKnown ? 'text-purple-300' : 'text-gray-400'}">${spell.name}</span>
+                                                    <span class="text-gray-500">${isExpanded ? ICONS.chevronUp : ICONS.chevronDown}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        ${isExpanded ? `
+                                            <div class="bg-gray-900/50 p-4 pl-11 text-sm space-y-2 border-t border-gray-700/50">
+                                                <div class="flex gap-4 text-gray-400 text-xs uppercase tracking-wider">
+                                                    <span><span class="text-gray-500">École:</span> ${spell.school}</span>
+                                                    <span><span class="text-gray-500">Dégâts:</span> ${spell.damage || 'N/A'}</span>
+                                                </div>
+                                                <p class="text-gray-300 leading-relaxed">${spell.description}</p>
+                                                ${spell.isCustom ? '<span class="inline-block text-[10px] bg-gray-700 text-gray-300 px-1 rounded">Custom</span>' : ''}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderSkills(char) {
+                return `
+                    <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                        <h3 class="text-xl font-bold mb-4 flex items-center gap-2">Compétences</h3>
+                        <div class="mb-6 flex gap-2">
+                            <input id="new-skill-input" type="text" placeholder="Nouvelle compétence..." class="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500">
+                            <button onclick="dndApp.addSkill()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded transition-colors">${ICONS.plus}</button>
+                        </div>
+                        <div class="space-y-2">
+                            ${char.skills.length === 0 ? `<p class="text-gray-500 text-center py-4">Aucune compétence ajoutée.</p>` : ''}
+                            ${char.skills.map(skill => `
+                                <div class="flex items-center justify-between bg-gray-900/50 p-3 rounded hover:bg-gray-900 transition-colors group">
+                                    <span class="font-medium text-gray-200">${skill.name}</span>
+                                    <div class="flex items-center gap-4">
+                                        <div class="flex items-center gap-2 bg-gray-800 rounded px-2">
+                                            <span class="text-xs text-gray-500 uppercase">Rangs</span>
+                                            <input type="number" value="${skill.ranks}" onchange="dndApp.updateSkillRank('${skill.id}', parseInt(this.value))" class="w-12 bg-transparent text-right font-mono text-white focus:outline-none">
+                                        </div>
+                                        <button onclick="dndApp.removeSkill('${skill.id}')" class="text-gray-600 hover:text-red-400 transition-colors">${ICONS.x}</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        };
+
+        // Init App
+        dndApp.init();
+    </script>
+</body>
 </html>
