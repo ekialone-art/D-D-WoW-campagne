@@ -1,0 +1,5 @@
+{
+  "name": "D&D 3.5 Companion",
+  "description": "Un gestionnaire de personnage pour D&D 3.5 permettant le suivi des PV, consommables (flèches, potions), sorts et compétences.",
+  "requestFramePermissions": []
+}
