@@ -140,7 +140,8 @@
             loader: `<svg class="animate-spin-slow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>`,
             alert: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`,
             crown: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/></svg>`,
-            user: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
+            user: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+            sword: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"></polyline><line x1="13" y1="19" x2="19" y2="13"></line><line x1="16" y1="16" x2="20" y2="20"></line><line x1="19" y1="21" x2="21" y2="19"></line></svg>`
         };
 
         const INITIAL_SPELLS = [
@@ -329,6 +330,7 @@
                     level: 1,
                     hp: { current: 10, max: 10 },
                     consumables: { arrows: 20, bolts: 10, bullets: 10, potions: 0 },
+                    weapons: [], // NEW
                     spellSlots: {},
                     knownSpells: [],
                     skills: []
@@ -378,6 +380,27 @@
                 if (!char) return;
                 char.consumables[key] = Math.max(0, char.consumables[key] + delta);
                 this.save();
+            },
+
+            // --- WEAPON ACTIONS ---
+            addWeapon() {
+                const input = document.getElementById('new-weapon-input');
+                const name = input.value.trim();
+                if (!name) return;
+                const char = this.getActiveChar();
+                if (!char.weapons) char.weapons = [];
+                char.weapons.push(name);
+                input.value = '';
+                this.save();
+                this.render();
+            },
+
+            removeWeapon(index) {
+                const char = this.getActiveChar();
+                if (!char.weapons) return;
+                char.weapons.splice(index, 1);
+                this.save();
+                this.render();
             },
 
             setTab(tab) { this.state.activeTab = tab; this.render(); },
@@ -663,7 +686,14 @@
             renderStatus(char) {
                 const hpPercent = Math.max(0, Math.min(100, (char.hp.current / char.hp.max) * 100));
                 const hpColor = hpPercent > 66 ? 'bg-green-600' : hpPercent > 33 ? 'bg-yellow-600' : 'bg-red-600';
+                
+                const weapons = char.weapons || [];
+                const hasBow = weapons.some(w => w.toLowerCase().includes('arc'));
+                const hasCrossbow = weapons.some(w => w.toLowerCase().includes('arbalète') || w.toLowerCase().includes('arbalete'));
+                const hasSling = weapons.some(w => w.toLowerCase().includes('fronde'));
+
                 return `
+                    <!-- HP Section -->
                     <div class="bg-gray-800 p-4 rounded-lg shadow-md border border-gray-700">
                         <div class="flex justify-between items-center mb-2">
                             <h3 class="text-lg font-bold flex items-center gap-2">${ICONS.heart} Points de Vie</h3>
@@ -682,11 +712,31 @@
                             <button onclick="dndApp.updateHP(${Math.min(char.hp.max, char.hp.current + 1)}, ${char.hp.max})" class="p-2 bg-green-900/50 hover:bg-green-800 rounded-full border border-green-700 transition-colors">${ICONS.plus}</button>
                         </div>
                     </div>
-                    <h3 class="text-lg font-bold text-gray-400 mt-8 mb-4 border-b border-gray-800 pb-2">Consommables</h3>
+                    
+                    <!-- Weapons Section -->
+                    <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-orange-400">${ICONS.sword} Armes</h3>
+                        <div class="mb-4 flex gap-2">
+                            <input id="new-weapon-input" type="text" placeholder="Ajouter une arme (ex: Arc long)" class="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-orange-500">
+                            <button onclick="dndApp.addWeapon()" class="bg-orange-700 hover:bg-orange-600 text-white px-4 py-2 rounded transition-colors">${ICONS.plus}</button>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            ${weapons.length === 0 ? `<p class="text-gray-500 text-sm italic w-full">Aucune arme équipée.</p>` : ''}
+                            ${weapons.map((w, i) => `
+                                <div class="bg-gray-900 border border-gray-700 rounded px-3 py-1 flex items-center gap-2">
+                                    <span>${w}</span>
+                                    <button onclick="dndApp.removeWeapon(${i})" class="text-gray-500 hover:text-red-500">${ICONS.x}</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Consumables Section -->
+                    <h3 class="text-lg font-bold text-gray-400 mt-4 mb-4 border-b border-gray-800 pb-2">Consommables</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        ${this.renderConsumableCard('arrows', 'Flèches (Arc)', ICONS.arrow, char.consumables.arrows)}
-                        ${this.renderConsumableCard('bolts', 'Carreaux (Arbalète)', ICONS.crosshair, char.consumables.bolts)}
-                        ${this.renderConsumableCard('bullets', 'Billes (Fronde)', ICONS.disc, char.consumables.bullets)}
+                        ${hasBow ? this.renderConsumableCard('arrows', 'Flèches (Arc)', ICONS.arrow, char.consumables.arrows) : ''}
+                        ${hasCrossbow ? this.renderConsumableCard('bolts', 'Carreaux (Arbalète)', ICONS.crosshair, char.consumables.bolts) : ''}
+                        ${hasSling ? this.renderConsumableCard('bullets', 'Billes (Fronde)', ICONS.disc, char.consumables.bullets) : ''}
                         ${this.renderConsumableCard('potions', 'Potions', ICONS.potion, char.consumables.potions)}
                     </div>
                 `;
@@ -694,7 +744,7 @@
 
             renderConsumableCard(key, label, icon, value) {
                 return `
-                    <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 flex flex-col justify-between">
+                    <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 flex flex-col justify-between fade-in">
                         <div class="flex items-center gap-2 mb-3">
                             ${icon} <span class="font-semibold text-gray-200">${label}</span>
                         </div>
