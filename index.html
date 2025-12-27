@@ -146,23 +146,44 @@
         };
 
         const INITIAL_SPELLS = [
-            { id: 's1', name: 'Projectile Magique', level: 1, school: 'Évocation', description: '2d4+2 dégâts de force.', damage: '2d4+2' },
-            { id: 's2', name: 'Armure de Mage', level: 1, school: 'Abjuration', description: '+4 CA.', damage: '-' },
-            { id: 's3', name: 'Boule de Feu', level: 3, school: 'Évocation', description: '1d6 dégâts par niveau.', damage: '1d6/niv' },
-            { id: 's4', name: 'Soins Légers', level: 1, school: 'Invocation', description: 'Soigne 1d8+1.', damage: 'Heal 1d8+1' },
+            // NIV 0
             { id: 's5', name: 'Lumière', level: 0, school: 'Évocation', description: 'Illumine un objet.', damage: '-' },
             { id: 's6', name: 'Détection de la Magie', level: 0, school: 'Divination', description: 'Détecte les auras magiques.', damage: '-' },
+            { id: 's7', name: 'Lecture de la Magie', level: 0, school: 'Divination', description: 'Permet de lire les parchemins.', damage: '-' },
+            { id: 's8', name: 'Manipulation à distance', level: 0, school: 'Transmutation', description: 'Déplace 2.5kg à distance.', damage: '-' },
+            { id: 's9', name: 'Prestidigitation', level: 0, school: 'Universelle', description: 'Tours de magie mineurs.', damage: '-' },
+            // NIV 1
+            { id: 's1', name: 'Projectile Magique', level: 1, school: 'Évocation', description: '2d4+2 dégâts de force.', damage: '2d4+2' },
+            { id: 's2', name: 'Armure de Mage', level: 1, school: 'Abjuration', description: '+4 CA.', damage: '-' },
+            { id: 's4', name: 'Soins Légers', level: 1, school: 'Invocation', description: 'Soigne 1d8+1.', damage: 'Heal 1d8+1' },
+            { id: 's10', name: 'Bouclier', level: 1, school: 'Abjuration', description: '+4 CA, bloque projectiles magiques.', damage: '-' },
+            { id: 's11', name: 'Sommeil', level: 1, school: 'Enchantement', description: 'Endort 4DV de créatures.', damage: '-' },
+            // NIV 2
+            { id: 's12', name: 'Invisibilité', level: 2, school: 'Illusion', description: 'Rend la cible invisible.', damage: '-' },
+            { id: 's13', name: 'Toile d\'araignée', level: 2, school: 'Invocation', description: 'Piège les cibles dans une zone.', damage: '-' },
+            { id: 's14', name: 'Force de Taureau', level: 2, school: 'Transmutation', description: '+4 Force.', damage: '-' },
+            // NIV 3
+            { id: 's3', name: 'Boule de Feu', level: 3, school: 'Évocation', description: '1d6 dégâts par niveau (max 10d6).', damage: '1d6/niv' },
+            { id: 's15', name: 'Vol', level: 3, school: 'Transmutation', description: 'La cible peut voler.', damage: '-' },
+            { id: 's16', name: 'Hâte', level: 3, school: 'Transmutation', description: '1 attaque sup, +1 CA/Reflexe, +9m vitesse.', damage: '-' },
+            { id: 's17', name: 'Éclair', level: 3, school: 'Évocation', description: '1d6 dégâts/niv sur une ligne.', damage: '1d6/niv' }
         ];
 
-        const WEAPON_PRESETS = [
-            { name: "Dague", damage: "1d4", type: "Perforant/Tranchant", range: "3m" },
-            { name: "Épée courte", damage: "1d6", type: "Perforant", range: "-" },
-            { name: "Épée longue", damage: "1d8", type: "Tranchant", range: "-" },
-            { name: "Grande hache", damage: "1d12", type: "Tranchant", range: "-" },
-            { name: "Arc court", damage: "1d6", type: "Perforant", range: "18m" },
-            { name: "Arc long", damage: "1d8", type: "Perforant", range: "30m" },
-            { name: "Arbalète légère", damage: "1d8", type: "Perforant", range: "24m" },
-            { name: "Fronde", damage: "1d4", type: "Contondant", range: "15m" }
+        const WEAPON_DATABASE = [
+            { category: "Courante", name: "Dague", damage: "1d4", type: "Perforant/Tranchant", range: "3m", crit: "19-20/x2" },
+            { category: "Courante", name: "Massue", damage: "1d6", type: "Contondant", range: "3m", crit: "x2" },
+            { category: "Courante", name: "Lance", damage: "1d8", type: "Perforant", range: "6m", crit: "x3" },
+            { category: "Courante", name: "Arbalète légère", damage: "1d8", type: "Perforant", range: "24m", crit: "19-20/x2" },
+            { category: "Courante", name: "Fronde", damage: "1d4", type: "Contondant", range: "15m", crit: "x2" },
+            { category: "Guerre", name: "Épée courte", damage: "1d6", type: "Perforant", range: "-", crit: "19-20/x2" },
+            { category: "Guerre", name: "Épée longue", damage: "1d8", type: "Tranchant", range: "-", crit: "19-20/x2" },
+            { category: "Guerre", name: "Hache d'armes", damage: "1d8", type: "Tranchant", range: "-", crit: "x3" },
+            { category: "Guerre", name: "Grande hache", damage: "1d12", type: "Tranchant", range: "-", crit: "x3" },
+            { category: "Guerre", name: "Espadon", damage: "2d6", type: "Tranchant", range: "-", crit: "19-20/x2" },
+            { category: "Guerre", name: "Arc court", damage: "1d6", type: "Perforant", range: "18m", crit: "x3" },
+            { category: "Guerre", name: "Arc long", damage: "1d8", type: "Perforant", range: "30m", crit: "x3" },
+            { category: "Exotique", name: "Épée bâtarde", damage: "1d10", type: "Tranchant", range: "-", crit: "19-20/x2" },
+            { category: "Exotique", name: "Hache de guerre naine", damage: "1d10", type: "Tranchant", range: "-", crit: "x3" }
         ];
 
         // --- STATE MANAGEMENT ---
@@ -425,13 +446,15 @@
             },
 
             // --- WEAPON ACTIONS ---
-            populateWeaponForm(presetName) {
-                const preset = WEAPON_PRESETS.find(p => p.name === presetName);
+            selectWeaponPreset(presetName) {
+                if (!presetName) return;
+                const preset = WEAPON_DATABASE.find(p => p.name === presetName);
                 if (preset) {
                     document.getElementById('w-name').value = preset.name;
                     document.getElementById('w-damage').value = preset.damage;
                     document.getElementById('w-type').value = preset.type;
                     document.getElementById('w-range').value = preset.range;
+                    // On pourrait ajouter le critique ici aussi si on avait un champ pour
                 }
             },
 
@@ -448,6 +471,7 @@
                 char.weapons.push({ id: Date.now(), name, damage, type, range });
                 
                 // Reset form
+                document.getElementById('w-select').value = "";
                 document.getElementById('w-name').value = '';
                 document.getElementById('w-damage').value = '';
                 document.getElementById('w-type').value = '';
@@ -793,14 +817,17 @@
 
                         ${isGM ? `
                         <div class="bg-gray-900/50 p-3 rounded mb-4 border border-gray-700">
-                            <div class="flex gap-2 mb-2 overflow-x-auto pb-1">
-                                ${WEAPON_PRESETS.map(p => `<button onclick="dndApp.populateWeaponForm('${p.name}')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded whitespace-nowrap">${p.name}</button>`).join('')}
-                            </div>
+                            <label class="block text-xs text-gray-500 mb-1">Sélectionner un modèle (Base D&D 3.5)</label>
+                            <select id="w-select" onchange="dndApp.selectWeaponPreset(this.value)" class="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm mb-3">
+                                <option value="">-- Choisir une arme --</option>
+                                ${WEAPON_DATABASE.map(w => `<option value="${w.name}">${w.name} (${w.category})</option>`).join('')}
+                            </select>
+
                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
                                 <input id="w-name" placeholder="Nom" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white">
-                                <input id="w-damage" placeholder="Dégâts (ex: 1d8)" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white">
-                                <input id="w-type" placeholder="Type (ex: Tranchant)" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white">
-                                <input id="w-range" placeholder="Portée (ex: 30m)" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white">
+                                <input id="w-damage" placeholder="Dégâts" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white">
+                                <input id="w-type" placeholder="Type" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white">
+                                <input id="w-range" placeholder="Portée" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white">
                             </div>
                             <button onclick="dndApp.addWeapon()" class="w-full bg-orange-700 hover:bg-orange-600 text-white py-1 rounded text-sm font-bold transition-colors">Ajouter Arme</button>
                         </div>
@@ -875,7 +902,9 @@
             renderSpells(char, isGM) {
                 const lvl = this.state.selectedSpellLevel;
                 const slot = char.spellSlots[lvl] || { total: 0, used: 0 };
+                // Filtre tous les sorts disponibles pour ce niveau (Base + Custom)
                 const spells = this.state.globalSpells.filter(s => s.level === lvl);
+                
                 return `
                     <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
                         ${Array.from({length: 10}, (_, i) => `
