@@ -15,6 +15,42 @@
         .scrollbar-thin::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .animate-spin-slow { animation: spin 2s linear infinite; }
+        
+        /* Tooltip simple amélioré */
+        .tooltip-container { position: relative; cursor: help; }
+        .tooltip-text { 
+            visibility: hidden; 
+            width: 280px; 
+            background-color: #1f2937; 
+            color: #fff; 
+            text-align: center; 
+            border-radius: 6px; 
+            padding: 8px; 
+            position: absolute; 
+            z-index: 50; 
+            top: 130%; 
+            right: 0; 
+            opacity: 0; 
+            transition: opacity 0.3s; 
+            font-size: 0.75rem; 
+            line-height: 1.4;
+            border: 1px solid #4b5563; 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); 
+        }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+        /* Petite flèche pour le tooltip */
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            bottom: 100%;
+            right: 10px;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent #1f2937 transparent;
+        }
     </style>
 </head>
 <body>
@@ -61,7 +97,24 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDrWdacqEvkprtpEnm138Bqs544itNPRkE",
+            authDomain: "base-dd-wow.firebaseapp.com",
+            projectId: "base-dd-wow",
+            storageBucket: "base-dd-wow.firebasestorage.app",
+            messagingSenderId: "988545850776",
+            appId: "1:988545850776:web:f723277ae3e60593861fed"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
         // --- CONSTANTS & ICONS ---
         const ICONS = {
             shield: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
@@ -78,7 +131,11 @@
             chevronDown: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
             chevronUp: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>`,
             check: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
-            x: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`
+            x: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+            cloud: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>`,
+            cloudCheck: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path><polyline points="8 15 10 17 15 12" stroke="white" stroke-width="3"></polyline></svg>`,
+            loader: `<svg class="animate-spin-slow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>`,
+            alert: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`
         };
 
         const INITIAL_SPELLS = [
@@ -99,52 +156,162 @@
                 selectedSpellLevel: 1,
                 expandedSpellId: null,
                 globalSpells: [...INITIAL_SPELLS],
-                showCharDropdown: false
+                showCharDropdown: false,
+                dbStatus: 'init', // init, connected, saving, saved, error
+                lastErrorCode: null
             },
+            saveTimeout: null,
 
             init() {
-                // Load from LocalStorage
-                const savedChars = localStorage.getItem('dnd35_characters');
-                const savedSpells = localStorage.getItem('dnd35_custom_spells');
-
-                if (savedChars) {
-                    this.state.characters = JSON.parse(savedChars);
-                    if (this.state.characters.length > 0) {
-                        this.state.activeCharId = this.state.characters[0].id;
-                    }
-                }
-
-                if (savedSpells) {
-                    const customSpells = JSON.parse(savedSpells);
-                    // Merge avoiding duplicates
-                    customSpells.forEach(s => {
-                        if (!this.state.globalSpells.find(gs => gs.id === s.id)) {
-                            this.state.globalSpells.push(s);
-                        }
-                    });
-                }
+                // 1. Load LocalStorage (Backup/Offline Mode)
+                this.loadFromLocalStorage();
+                
+                // 2. Render immediately
+                this.render();
+                
+                // 3. Authenticate Anonymously & Connect to DB
+                signInAnonymously(auth).then(() => {
+                    this.setupFirestoreListener();
+                }).catch((error) => {
+                    console.error("Auth error:", error);
+                    // Fallback to error state, app works via LocalStorage
+                    this.state.dbStatus = 'error';
+                    this.state.lastErrorCode = error.code;
+                    this.renderStatusIcon();
+                });
 
                 // Bind Form
                 document.getElementById('spell-form').addEventListener('submit', (e) => {
                     e.preventDefault();
                     this.createSpell(new FormData(e.target));
                 });
+            },
+            
+            setupFirestoreListener() {
+                const dataRef = doc(db, "dnd_app", "main_data");
+                
+                onSnapshot(dataRef, (docSnap) => {
+                    // Firebase connection successful
+                    if (this.state.dbStatus === 'init' || this.state.dbStatus === 'error') {
+                        this.state.dbStatus = 'connected';
+                        this.state.lastErrorCode = null;
+                        this.renderStatusIcon();
+                    }
 
-                this.render();
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        
+                        // Merge spells logic
+                        const remoteSpells = data.globalSpells || [];
+                        const localSpells = [...INITIAL_SPELLS];
+                        const finalSpells = [...localSpells];
+                        
+                        remoteSpells.forEach(rs => {
+                           if (rs.isCustom && !finalSpells.find(fs => fs.id === rs.id)) {
+                               finalSpells.push(rs);
+                           }
+                        });
+
+                        this.state.characters = data.characters || [];
+                        this.state.globalSpells = finalSpells;
+                        
+                        if (!this.state.activeCharId && this.state.characters.length > 0) {
+                            this.state.activeCharId = this.state.characters[0].id;
+                        }
+                        
+                        this.render();
+                        this.saveToLocalStorage();
+                    } else {
+                        if (this.state.characters.length > 0) {
+                            this.save();
+                        }
+                    }
+                    
+                    if (this.state.dbStatus === 'saving') {
+                         this.state.dbStatus = 'saved';
+                         setTimeout(() => {
+                             if(this.state.dbStatus === 'saved') {
+                                 this.state.dbStatus = 'connected';
+                                 this.renderStatusIcon();
+                             }
+                         }, 2000);
+                    }
+                }, (error) => {
+                    console.error("Firebase error:", error);
+                    this.state.dbStatus = 'error';
+                    this.state.lastErrorCode = error.code;
+                    this.renderStatusIcon();
+                });
+            },
+
+            loadFromLocalStorage() {
+                try {
+                    const savedChars = localStorage.getItem('dnd35_characters');
+                    const savedSpells = localStorage.getItem('dnd35_custom_spells');
+                    
+                    if (savedChars) {
+                        this.state.characters = JSON.parse(savedChars);
+                        if (this.state.characters.length > 0) {
+                            this.state.activeCharId = this.state.characters[0].id;
+                        }
+                    }
+                    
+                    if (savedSpells) {
+                        const customSpells = JSON.parse(savedSpells);
+                        customSpells.forEach(s => {
+                            if (!this.state.globalSpells.find(gs => gs.id === s.id)) {
+                                this.state.globalSpells.push(s);
+                            }
+                        });
+                    }
+                } catch(e) { console.error("Local storage load error", e); }
+            },
+
+            saveToLocalStorage() {
+                try {
+                    localStorage.setItem('dnd35_characters', JSON.stringify(this.state.characters));
+                    const customSpells = this.state.globalSpells.filter(s => s.isCustom);
+                    localStorage.setItem('dnd35_custom_spells', JSON.stringify(customSpells));
+                } catch(e) { console.error("Local storage save error", e); }
             },
 
             save() {
-                localStorage.setItem('dnd35_characters', JSON.stringify(this.state.characters));
-                const customSpells = this.state.globalSpells.filter(s => s.isCustom);
-                localStorage.setItem('dnd35_custom_spells', JSON.stringify(customSpells));
-                this.render();
-            },
+                this.saveToLocalStorage();
+                this.state.dbStatus = 'saving';
+                this.renderStatusIcon();
 
-            getActiveChar() {
-                return this.state.characters.find(c => c.id === this.state.activeCharId);
+                if (this.saveTimeout) clearTimeout(this.saveTimeout);
+                
+                this.saveTimeout = setTimeout(async () => {
+                    try {
+                        const customSpells = this.state.globalSpells.filter(s => s.isCustom);
+                        await setDoc(doc(db, "dnd_app", "main_data"), {
+                            characters: this.state.characters,
+                            globalSpells: customSpells,
+                            lastUpdated: new Date().toISOString()
+                        }, { merge: true });
+                        
+                        if(this.state.dbStatus === 'saving') {
+                             this.state.dbStatus = 'saved';
+                             this.renderStatusIcon();
+                             setTimeout(() => {
+                                 if (this.state.dbStatus === 'saved') {
+                                     this.state.dbStatus = 'connected';
+                                     this.renderStatusIcon();
+                                 }
+                             }, 2000);
+                        }
+                    } catch (e) {
+                        console.error("Save failed", e);
+                        this.state.dbStatus = 'error';
+                        this.state.lastErrorCode = e.code;
+                        this.renderStatusIcon();
+                    }
+                }, 1000);
             },
 
             // --- ACTIONS ---
+            getActiveChar() { return this.state.characters.find(c => c.id === this.state.activeCharId); },
 
             createCharacter() {
                 const newChar = {
@@ -153,7 +320,7 @@
                     level: 1,
                     hp: { current: 10, max: 10 },
                     consumables: { arrows: 20, bolts: 10, bullets: 10, potions: 0 },
-                    spellSlots: {}, // { 0: { total: 0, used: 0 } }
+                    spellSlots: {},
                     knownSpells: [],
                     skills: []
                 };
@@ -161,6 +328,7 @@
                 this.state.activeCharId = newChar.id;
                 this.state.showCharDropdown = false;
                 this.save();
+                this.render();
             },
 
             selectCharacter(id) {
@@ -172,18 +340,17 @@
             deleteCharacter(id, e) {
                 if (e) e.stopPropagation();
                 if (!confirm("Supprimer ce personnage ?")) return;
-                
                 this.state.characters = this.state.characters.filter(c => c.id !== id);
                 if (this.state.activeCharId === id) {
                     this.state.activeCharId = this.state.characters.length > 0 ? this.state.characters[0].id : null;
                 }
                 this.save();
+                this.render();
             },
 
             updateCharacterField(field, value) {
                 const char = this.getActiveChar();
                 if (!char) return;
-                
                 if (field === 'name') char.name = value;
                 if (field === 'level') char.level = parseInt(value) || 1;
                 this.save();
@@ -204,27 +371,14 @@
                 this.save();
             },
 
-            setTab(tab) {
-                this.state.activeTab = tab;
-                this.render();
-            },
-
-            toggleDropdown() {
-                this.state.showCharDropdown = !this.state.showCharDropdown;
-                this.render();
-            },
-
-            // Spell Actions
-            setSpellLevel(lvl) {
-                this.state.selectedSpellLevel = lvl;
-                this.render();
-            },
+            setTab(tab) { this.state.activeTab = tab; this.render(); },
+            toggleDropdown() { this.state.showCharDropdown = !this.state.showCharDropdown; this.render(); },
+            setSpellLevel(lvl) { this.state.selectedSpellLevel = lvl; this.render(); },
 
             updateSpellSlot(type, delta) {
                 const char = this.getActiveChar();
                 const lvl = this.state.selectedSpellLevel;
                 if (!char.spellSlots[lvl]) char.spellSlots[lvl] = { total: 0, used: 0 };
-                
                 char.spellSlots[lvl][type] = Math.max(0, char.spellSlots[lvl][type] + delta);
                 this.save();
             },
@@ -237,19 +391,9 @@
                 this.save();
             },
 
-            toggleExpandSpell(spellId) {
-                this.state.expandedSpellId = this.state.expandedSpellId === spellId ? null : spellId;
-                this.render();
-            },
-
-            openModal() {
-                document.getElementById('spell-modal').classList.replace('hidden', 'flex');
-            },
-
-            closeModal() {
-                document.getElementById('spell-modal').classList.replace('flex', 'hidden');
-                document.getElementById('spell-form').reset();
-            },
+            toggleExpandSpell(spellId) { this.state.expandedSpellId = this.state.expandedSpellId === spellId ? null : spellId; this.render(); },
+            openModal() { document.getElementById('spell-modal').classList.replace('hidden', 'flex'); },
+            closeModal() { document.getElementById('spell-modal').classList.replace('flex', 'hidden'); document.getElementById('spell-form').reset(); },
 
             createSpell(formData) {
                 const newSpell = {
@@ -262,31 +406,28 @@
                     isCustom: true
                 };
                 this.state.globalSpells.push(newSpell);
-                
-                // Auto add to known for current char
                 const char = this.getActiveChar();
                 if (char) char.knownSpells.push(newSpell.id);
-                
                 this.closeModal();
                 this.save();
             },
 
-            // Skill Actions
             addSkill() {
                 const input = document.getElementById('new-skill-input');
                 const name = input.value.trim();
                 if (!name) return;
-                
                 const char = this.getActiveChar();
                 char.skills.push({ id: Date.now().toString(), name, ranks: 0 });
                 input.value = '';
                 this.save();
+                this.render();
             },
 
             removeSkill(skillId) {
                 const char = this.getActiveChar();
                 char.skills = char.skills.filter(s => s.id !== skillId);
                 this.save();
+                this.render();
             },
 
             updateSkillRank(skillId, rank) {
@@ -296,7 +437,52 @@
                 this.save();
             },
 
-            // --- RENDER FUNCTIONS ---
+            renderStatusIcon() {
+                const el = document.getElementById('status-icon');
+                if (!el) return;
+                
+                let iconHtml = '';
+                let statusText = '';
+                let tooltip = '';
+                
+                switch (this.state.dbStatus) {
+                    case 'init': 
+                        iconHtml = `<span class="text-gray-500">${ICONS.cloud}</span>`; 
+                        statusText = "Connexion...";
+                        break;
+                    case 'connected': 
+                        iconHtml = `<span class="text-green-500">${ICONS.cloud}</span>`; 
+                        statusText = "En ligne";
+                        break;
+                    case 'saving': 
+                        iconHtml = `<span class="text-yellow-500">${ICONS.loader}</span>`; 
+                        statusText = "Sauvegarde...";
+                        break;
+                    case 'saved': 
+                        iconHtml = `<span class="text-green-400 font-bold flex items-center">${ICONS.cloudCheck}</span>`; 
+                        statusText = "Sauvegardé";
+                        break;
+                    case 'error': 
+                        iconHtml = `<span class="text-red-500 cursor-pointer">${ICONS.alert}</span>`; 
+                        statusText = "Erreur Sync";
+                        if (this.state.lastErrorCode === 'auth/admin-restricted-operation') {
+                            tooltip = "Authentification Anonyme désactivée. Allez dans Firebase Console > Authentication > Sign-in method et activez 'Anonyme'.";
+                        } else if (this.state.lastErrorCode === 'permission-denied') {
+                            tooltip = "Permissions insuffisantes. Vérifiez les règles de sécurité Firestore.";
+                        } else {
+                            tooltip = `Erreur: ${this.state.lastErrorCode || 'Inconnue'}. Vérifiez la console pour plus de détails.`;
+                        }
+                        break;
+                }
+                
+                el.innerHTML = `
+                    <div class="tooltip-container flex items-center gap-2 text-xs font-mono uppercase tracking-wider bg-gray-900/80 px-2 py-1 rounded border border-gray-700/50">
+                        ${iconHtml}
+                        <span class="hidden sm:inline text-gray-400">${statusText}</span>
+                        ${tooltip ? `<span class="tooltip-text">${tooltip}</span>` : ''}
+                    </div>
+                `;
+            },
             
             render() {
                 const app = document.getElementById('app');
@@ -305,11 +491,14 @@
                 let html = `
                     <header class="bg-gray-900 border-b border-gray-800 p-4 sticky top-0 z-40 shadow-md">
                         <div class="max-w-3xl mx-auto flex justify-between items-center">
-                            <h1 class="text-xl md:text-2xl font-bold text-gray-100 flex items-center gap-2">
-                                <span class="text-red-600">${ICONS.shield}</span>
-                                <span class="hidden sm:inline">D&D 3.5 Companion</span>
-                                <span class="sm:hidden">D&D 3.5</span>
-                            </h1>
+                            <div class="flex items-center gap-4">
+                                <h1 class="text-xl md:text-2xl font-bold text-gray-100 flex items-center gap-2">
+                                    <span class="text-red-600">${ICONS.shield}</span>
+                                    <span class="hidden sm:inline">D&D 3.5 Companion</span>
+                                    <span class="sm:hidden">D&D 3.5</span>
+                                </h1>
+                                <div id="status-icon"></div>
+                            </div>
                             
                             <div class="relative">
                                 <button onclick="dndApp.toggleDropdown()" class="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-700 transition-colors">
@@ -349,13 +538,13 @@
                         </div>
                     `;
                     app.innerHTML = html;
+                    this.renderStatusIcon();
                     return;
                 }
 
-                // Main Content
                 html += `<main class="max-w-3xl mx-auto p-4 fade-in">`;
-
-                // Header Info
+                
+                // Character Header
                 html += `
                     <div class="mb-6 flex gap-4 items-end bg-gray-800/50 p-4 rounded-lg border border-gray-800">
                         <div class="flex-1">
@@ -371,7 +560,6 @@
                     </div>
                 `;
 
-                // Tabs
                 html += `
                     <div class="flex mb-6 bg-gray-900/50 p-1 rounded-lg">
                         <button onclick="dndApp.setTab('status')" class="flex-1 py-2 text-sm font-bold rounded-md transition-all ${this.state.activeTab === 'status' ? 'bg-gray-700 text-white shadow' : 'text-gray-500 hover:text-gray-300'}">Général</button>
@@ -380,27 +568,20 @@
                     </div>
                 `;
 
-                // Content
                 html += `<div class="space-y-6">`;
-                
-                if (this.state.activeTab === 'status') {
-                    html += this.renderStatus(char);
-                } else if (this.state.activeTab === 'spells') {
-                    html += this.renderSpells(char);
-                } else {
-                    html += this.renderSkills(char);
-                }
-                
+                if (this.state.activeTab === 'status') html += this.renderStatus(char);
+                else if (this.state.activeTab === 'spells') html += this.renderSpells(char);
+                else html += this.renderSkills(char);
                 html += `</div></main>`;
+                
                 app.innerHTML = html;
+                this.renderStatusIcon();
             },
 
             renderStatus(char) {
                 const hpPercent = Math.max(0, Math.min(100, (char.hp.current / char.hp.max) * 100));
                 const hpColor = hpPercent > 66 ? 'bg-green-600' : hpPercent > 33 ? 'bg-yellow-600' : 'bg-red-600';
-
                 return `
-                    <!-- Health -->
                     <div class="bg-gray-800 p-4 rounded-lg shadow-md border border-gray-700">
                         <div class="flex justify-between items-center mb-2">
                             <h3 class="text-lg font-bold flex items-center gap-2">${ICONS.heart} Points de Vie</h3>
@@ -419,7 +600,6 @@
                             <button onclick="dndApp.updateHP(${Math.min(char.hp.max, char.hp.current + 1)}, ${char.hp.max})" class="p-2 bg-green-900/50 hover:bg-green-800 rounded-full border border-green-700 transition-colors">${ICONS.plus}</button>
                         </div>
                     </div>
-
                     <h3 class="text-lg font-bold text-gray-400 mt-8 mb-4 border-b border-gray-800 pb-2">Consommables</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         ${this.renderConsumableCard('arrows', 'Flèches (Arc)', ICONS.arrow, char.consumables.arrows)}
@@ -449,16 +629,12 @@
                 const lvl = this.state.selectedSpellLevel;
                 const slot = char.spellSlots[lvl] || { total: 0, used: 0 };
                 const spells = this.state.globalSpells.filter(s => s.level === lvl);
-
                 return `
-                    <!-- Level Selector -->
                     <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
                         ${Array.from({length: 10}, (_, i) => `
                             <button onclick="dndApp.setSpellLevel(${i})" class="flex-shrink-0 px-4 py-2 rounded-lg font-bold transition-all ${lvl === i ? 'bg-purple-600 text-white ring-2 ring-purple-400' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}">Niv ${i}</button>
                         `).join('')}
                     </div>
-
-                    <!-- Slots -->
                     <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
                         <h3 class="text-lg font-bold mb-4 text-purple-300 flex items-center gap-2">${ICONS.wand} Emplacements (Niv ${lvl})</h3>
                         <div class="flex items-center gap-8 justify-center bg-gray-900 p-4 rounded-lg">
@@ -481,8 +657,6 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- List -->
                     <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
                         <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
                             <h3 class="text-lg font-bold text-gray-200">Grimoire</h3>
@@ -552,7 +726,7 @@
             }
         };
 
-        // Init App
+        window.dndApp = dndApp;
         dndApp.init();
     </script>
 </body>
