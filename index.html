@@ -141,7 +141,8 @@
             alert: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`,
             crown: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/></svg>`,
             user: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
-            sword: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"></polyline><line x1="13" y1="19" x2="19" y2="13"></line><line x1="16" y1="16" x2="20" y2="20"></line><line x1="19" y1="21" x2="21" y2="19"></line></svg>`
+            sword: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"></polyline><line x1="13" y1="19" x2="19" y2="13"></line><line x1="16" y1="16" x2="20" y2="20"></line><line x1="19" y1="21" x2="21" y2="19"></line></svg>`,
+            history: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-6M6 20V10M18 20V4"/></svg>`
         };
 
         const INITIAL_SPELLS = [
@@ -151,6 +152,17 @@
             { id: 's4', name: 'Soins Légers', level: 1, school: 'Invocation', description: 'Soigne 1d8+1.', damage: 'Heal 1d8+1' },
             { id: 's5', name: 'Lumière', level: 0, school: 'Évocation', description: 'Illumine un objet.', damage: '-' },
             { id: 's6', name: 'Détection de la Magie', level: 0, school: 'Divination', description: 'Détecte les auras magiques.', damage: '-' },
+        ];
+
+        const WEAPON_PRESETS = [
+            { name: "Dague", damage: "1d4", type: "Perforant/Tranchant", range: "3m" },
+            { name: "Épée courte", damage: "1d6", type: "Perforant", range: "-" },
+            { name: "Épée longue", damage: "1d8", type: "Tranchant", range: "-" },
+            { name: "Grande hache", damage: "1d12", type: "Tranchant", range: "-" },
+            { name: "Arc court", damage: "1d6", type: "Perforant", range: "18m" },
+            { name: "Arc long", damage: "1d8", type: "Perforant", range: "30m" },
+            { name: "Arbalète légère", damage: "1d8", type: "Perforant", range: "24m" },
+            { name: "Fronde", damage: "1d4", type: "Contondant", range: "15m" }
         ];
 
         // --- STATE MANAGEMENT ---
@@ -165,7 +177,9 @@
                 globalSpells: [...INITIAL_SPELLS],
                 showCharDropdown: false,
                 dbStatus: 'init',
-                lastErrorCode: null
+                lastErrorCode: null,
+                // UI state for forms
+                weaponForm: { name: '', damage: '', type: '', range: '' }
             },
             saveTimeout: null,
 
@@ -285,8 +299,6 @@
 
             save() {
                 this.saveToLocalStorage();
-                // En mode joueur, on sauvegarde aussi, mais idéalement les règles de sécu devraient empêcher 
-                // les joueurs de modifier d'autres documents. Ici tout est dans un doc, c'est simplifié.
                 this.state.dbStatus = 'saving';
                 this.renderStatusIcon();
 
@@ -323,6 +335,17 @@
             // --- ACTIONS ---
             getActiveChar() { return this.state.characters.find(c => c.id === this.state.activeCharId); },
 
+            addLog(char, message) {
+                if (!char.logs) char.logs = [];
+                const role = this.state.viewMode === 'gm' ? 'MJ' : 'Joueur';
+                char.logs.unshift({
+                    timestamp: new Date().toISOString(),
+                    message: message,
+                    author: role
+                });
+                if (char.logs.length > 20) char.logs.pop(); // Keep log size manageable
+            },
+
             createCharacter() {
                 const newChar = {
                     id: `char-${Date.now()}`,
@@ -330,10 +353,11 @@
                     level: 1,
                     hp: { current: 10, max: 10 },
                     consumables: { arrows: 20, bolts: 10, bullets: 10, potions: 0 },
-                    weapons: [], // NEW
+                    weapons: [],
                     spellSlots: {},
                     knownSpells: [],
-                    skills: []
+                    skills: [],
+                    logs: []
                 };
                 this.state.characters.push(newChar);
                 this.state.activeCharId = newChar.id;
@@ -378,19 +402,57 @@
             updateConsumable(key, delta) {
                 const char = this.getActiveChar();
                 if (!char) return;
+                const prev = char.consumables[key];
                 char.consumables[key] = Math.max(0, char.consumables[key] + delta);
+                
+                // Logging
+                if (prev !== char.consumables[key]) {
+                    const itemName = {arrows: "Flèche", bolts: "Carreau", bullets: "Bille", potions: "Potion"}[key];
+                    const action = delta > 0 ? "ajouté" : "utilisé";
+                    this.addLog(char, `${action} 1 ${itemName} (${prev} -> ${char.consumables[key]})`);
+                }
+                
                 this.save();
+            },
+            
+            givePotion() {
+                const char = this.getActiveChar();
+                if (!char) return;
+                char.consumables.potions = (char.consumables.potions || 0) + 1;
+                this.addLog(char, "a reçu une Potion du MJ");
+                this.save();
+                this.render();
             },
 
             // --- WEAPON ACTIONS ---
+            populateWeaponForm(presetName) {
+                const preset = WEAPON_PRESETS.find(p => p.name === presetName);
+                if (preset) {
+                    document.getElementById('w-name').value = preset.name;
+                    document.getElementById('w-damage').value = preset.damage;
+                    document.getElementById('w-type').value = preset.type;
+                    document.getElementById('w-range').value = preset.range;
+                }
+            },
+
             addWeapon() {
-                const input = document.getElementById('new-weapon-input');
-                const name = input.value.trim();
+                const name = document.getElementById('w-name').value;
+                const damage = document.getElementById('w-damage').value;
+                const type = document.getElementById('w-type').value;
+                const range = document.getElementById('w-range').value;
+
                 if (!name) return;
                 const char = this.getActiveChar();
                 if (!char.weapons) char.weapons = [];
-                char.weapons.push(name);
-                input.value = '';
+                
+                char.weapons.push({ id: Date.now(), name, damage, type, range });
+                
+                // Reset form
+                document.getElementById('w-name').value = '';
+                document.getElementById('w-damage').value = '';
+                document.getElementById('w-type').value = '';
+                document.getElementById('w-range').value = '';
+                
                 this.save();
                 this.render();
             },
@@ -519,7 +581,7 @@
                                 <div class="flex flex-col items-center gap-4 relative z-10">
                                     <div class="p-3 bg-purple-900/30 rounded-full text-purple-400">${ICONS.crown}</div>
                                     <h2 class="text-xl font-bold text-white">Maître de Jeu</h2>
-                                    <p class="text-sm text-gray-400 text-center">Accès total. Créez des personnages, gérez les fiches et supervisez la partie.</p>
+                                    <p class="text-sm text-gray-400 text-center">Accès total. Créez des personnages, gérez les fiches, attribuez du loot.</p>
                                 </div>
                             </div>
                             
@@ -528,7 +590,7 @@
                                 <div class="flex flex-col items-center gap-4 relative z-10">
                                     <div class="p-3 bg-blue-900/30 rounded-full text-blue-400">${ICONS.user}</div>
                                     <h2 class="text-xl font-bold text-white">Joueur</h2>
-                                    <p class="text-sm text-gray-400 text-center">Accès restreint. Sélectionnez votre personnage et gérez uniquement ses stats.</p>
+                                    <p class="text-sm text-gray-400 text-center">Accès restreint. Gérez vos consommables.</p>
                                 </div>
                             </div>
                         </div>
@@ -674,23 +736,30 @@
                 `;
 
                 html += `<div class="space-y-6">`;
-                if (this.state.activeTab === 'status') html += this.renderStatus(char);
-                else if (this.state.activeTab === 'spells') html += this.renderSpells(char);
-                else html += this.renderSkills(char);
+                if (this.state.activeTab === 'status') html += this.renderStatus(char, isGM);
+                else if (this.state.activeTab === 'spells') html += this.renderSpells(char, isGM);
+                else html += this.renderSkills(char, isGM);
                 html += `</div></main>`;
                 
                 app.innerHTML = html;
                 this.renderStatusIcon();
             },
 
-            renderStatus(char) {
+            renderStatus(char, isGM) {
                 const hpPercent = Math.max(0, Math.min(100, (char.hp.current / char.hp.max) * 100));
                 const hpColor = hpPercent > 66 ? 'bg-green-600' : hpPercent > 33 ? 'bg-yellow-600' : 'bg-red-600';
                 
-                const weapons = char.weapons || [];
-                const hasBow = weapons.some(w => w.toLowerCase().includes('arc'));
-                const hasCrossbow = weapons.some(w => w.toLowerCase().includes('arbalète') || w.toLowerCase().includes('arbalete'));
-                const hasSling = weapons.some(w => w.toLowerCase().includes('fronde'));
+                // Normalisation des armes (migration ancien format string -> objet si besoin)
+                let weapons = char.weapons || [];
+                // Migration à la volée pour compatibilité
+                weapons = weapons.map(w => typeof w === 'string' ? { id: Date.now(), name: w, damage: '-', type: '-', range: '-' } : w);
+
+                const hasBow = weapons.some(w => w.name.toLowerCase().includes('arc'));
+                const hasCrossbow = weapons.some(w => w.name.toLowerCase().includes('arbalète') || w.name.toLowerCase().includes('arbalete'));
+                const hasSling = weapons.some(w => w.name.toLowerCase().includes('fronde'));
+                
+                // Logs
+                const logs = char.logs || [];
 
                 return `
                     <!-- HP Section -->
@@ -698,47 +767,93 @@
                         <div class="flex justify-between items-center mb-2">
                             <h3 class="text-lg font-bold flex items-center gap-2">${ICONS.heart} Points de Vie</h3>
                             <div class="flex items-center gap-2">
-                                <input type="number" value="${char.hp.current}" onchange="dndApp.updateHP(parseInt(this.value), ${char.hp.max})" class="w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-white">
+                                <input type="number" value="${char.hp.current}" ${isGM ? '' : 'readonly'} onchange="dndApp.updateHP(parseInt(this.value), ${char.hp.max})" class="w-16 bg-gray-900 border ${isGM ? 'border-gray-600' : 'border-transparent'} rounded px-2 py-1 text-center text-white">
                                 <span class="text-gray-400">/</span>
-                                <input type="number" value="${char.hp.max}" onchange="dndApp.updateHP(${char.hp.current}, parseInt(this.value))" class="w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-white">
+                                <input type="number" value="${char.hp.max}" ${isGM ? '' : 'readonly'} onchange="dndApp.updateHP(${char.hp.current}, parseInt(this.value))" class="w-16 bg-gray-900 border ${isGM ? 'border-gray-600' : 'border-transparent'} rounded px-2 py-1 text-center text-white">
                             </div>
                         </div>
                         <div class="w-full bg-gray-900 rounded-full h-6 border border-gray-600 relative overflow-hidden">
                             <div class="h-full transition-all duration-500 ease-out ${hpColor}" style="width: ${hpPercent}%"></div>
                             <div class="absolute inset-0 flex items-center justify-center text-xs font-bold shadow-sm">${hpPercent.toFixed(0)}%</div>
                         </div>
+                        ${isGM ? `
                         <div class="flex justify-center gap-4 mt-4">
                             <button onclick="dndApp.updateHP(${Math.max(0, char.hp.current - 1)}, ${char.hp.max})" class="p-2 bg-red-900/50 hover:bg-red-800 rounded-full border border-red-700 transition-colors">${ICONS.minus}</button>
                             <button onclick="dndApp.updateHP(${Math.min(char.hp.max, char.hp.current + 1)}, ${char.hp.max})" class="p-2 bg-green-900/50 hover:bg-green-800 rounded-full border border-green-700 transition-colors">${ICONS.plus}</button>
                         </div>
+                        ` : ''}
                     </div>
                     
                     <!-- Weapons Section -->
                     <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
-                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-orange-400">${ICONS.sword} Armes</h3>
-                        <div class="mb-4 flex gap-2">
-                            <input id="new-weapon-input" type="text" placeholder="Ajouter une arme (ex: Arc long)" class="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-orange-500">
-                            <button onclick="dndApp.addWeapon()" class="bg-orange-700 hover:bg-orange-600 text-white px-4 py-2 rounded transition-colors">${ICONS.plus}</button>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold flex items-center gap-2 text-orange-400">${ICONS.sword} Armes</h3>
+                            ${isGM ? `<div class="text-xs text-gray-500">Mode MJ : Édition active</div>` : ''}
                         </div>
-                        <div class="flex flex-wrap gap-2">
-                            ${weapons.length === 0 ? `<p class="text-gray-500 text-sm italic w-full">Aucune arme équipée.</p>` : ''}
+
+                        ${isGM ? `
+                        <div class="bg-gray-900/50 p-3 rounded mb-4 border border-gray-700">
+                            <div class="flex gap-2 mb-2 overflow-x-auto pb-1">
+                                ${WEAPON_PRESETS.map(p => `<button onclick="dndApp.populateWeaponForm('${p.name}')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded whitespace-nowrap">${p.name}</button>`).join('')}
+                            </div>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+                                <input id="w-name" placeholder="Nom" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white">
+                                <input id="w-damage" placeholder="Dégâts (ex: 1d8)" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white">
+                                <input id="w-type" placeholder="Type (ex: Tranchant)" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white">
+                                <input id="w-range" placeholder="Portée (ex: 30m)" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white">
+                            </div>
+                            <button onclick="dndApp.addWeapon()" class="w-full bg-orange-700 hover:bg-orange-600 text-white py-1 rounded text-sm font-bold transition-colors">Ajouter Arme</button>
+                        </div>
+                        ` : ''}
+
+                        <div class="space-y-2">
+                            ${weapons.length === 0 ? `<p class="text-gray-500 text-sm italic w-full text-center">Aucune arme équipée.</p>` : ''}
                             ${weapons.map((w, i) => `
-                                <div class="bg-gray-900 border border-gray-700 rounded px-3 py-1 flex items-center gap-2">
-                                    <span>${w}</span>
-                                    <button onclick="dndApp.removeWeapon(${i})" class="text-gray-500 hover:text-red-500">${ICONS.x}</button>
+                                <div class="bg-gray-900 border border-gray-700 rounded p-3 flex justify-between items-center">
+                                    <div>
+                                        <div class="font-bold text-gray-200">${w.name}</div>
+                                        <div class="text-xs text-gray-400 flex gap-3 mt-1">
+                                            <span><span class="text-gray-600">Dmg:</span> ${w.damage}</span>
+                                            <span><span class="text-gray-600">Type:</span> ${w.type}</span>
+                                            <span><span class="text-gray-600">Portée:</span> ${w.range}</span>
+                                        </div>
+                                    </div>
+                                    ${isGM ? `<button onclick="dndApp.removeWeapon(${i})" class="text-gray-500 hover:text-red-500 p-2">${ICONS.trash}</button>` : ''}
                                 </div>
                             `).join('')}
                         </div>
                     </div>
 
                     <!-- Consumables Section -->
-                    <h3 class="text-lg font-bold text-gray-400 mt-4 mb-4 border-b border-gray-800 pb-2">Consommables</h3>
+                    <div class="flex justify-between items-end border-b border-gray-800 pb-2 mt-4 mb-4">
+                         <h3 class="text-lg font-bold text-gray-400">Consommables</h3>
+                         ${isGM ? `<button onclick="dndApp.givePotion()" class="text-xs bg-blue-900 hover:bg-blue-800 text-blue-200 px-3 py-1 rounded border border-blue-700 flex items-center gap-1">${ICONS.plus} Donner Potion</button>` : ''}
+                    </div>
+                    
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         ${hasBow ? this.renderConsumableCard('arrows', 'Flèches (Arc)', ICONS.arrow, char.consumables.arrows) : ''}
                         ${hasCrossbow ? this.renderConsumableCard('bolts', 'Carreaux (Arbalète)', ICONS.crosshair, char.consumables.bolts) : ''}
                         ${hasSling ? this.renderConsumableCard('bullets', 'Billes (Fronde)', ICONS.disc, char.consumables.bullets) : ''}
                         ${this.renderConsumableCard('potions', 'Potions', ICONS.potion, char.consumables.potions)}
                     </div>
+
+                    <!-- LOGS SECTION (Visible MJ) -->
+                    ${isGM && logs.length > 0 ? `
+                        <div class="mt-8 bg-black/30 rounded-lg p-4 border border-gray-800">
+                            <h4 class="text-gray-500 text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2">${ICONS.history} Historique Récent</h4>
+                            <div class="space-y-2 text-sm font-mono max-h-40 overflow-y-auto pr-2 scrollbar-thin">
+                                ${logs.map(l => `
+                                    <div class="flex gap-2 text-gray-400">
+                                        <span class="text-gray-600 text-[10px] whitespace-nowrap pt-1">${new Date(l.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                        <div>
+                                            <span class="${l.author === 'MJ' ? 'text-purple-400' : 'text-blue-400'} font-bold text-xs">[${l.author}]</span>
+                                            <span class="text-gray-300">${l.message}</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
                 `;
             },
 
@@ -757,7 +872,7 @@
                 `;
             },
 
-            renderSpells(char) {
+            renderSpells(char, isGM) {
                 const lvl = this.state.selectedSpellLevel;
                 const slot = char.spellSlots[lvl] || { total: 0, used: 0 };
                 const spells = this.state.globalSpells.filter(s => s.level === lvl);
@@ -773,9 +888,9 @@
                             <div class="text-center">
                                 <label class="block text-xs text-gray-500 mb-1">DISPONIBLES</label>
                                 <div class="flex items-center gap-2">
-                                    <button onclick="dndApp.updateSpellSlot('total', -1)" class="p-1 bg-gray-700 rounded hover:bg-gray-600">${ICONS.minus}</button>
+                                    ${isGM ? `<button onclick="dndApp.updateSpellSlot('total', -1)" class="p-1 bg-gray-700 rounded hover:bg-gray-600">${ICONS.minus}</button>` : ''}
                                     <span class="text-2xl font-mono w-8 text-center">${slot.total}</span>
-                                    <button onclick="dndApp.updateSpellSlot('total', 1)" class="p-1 bg-gray-700 rounded hover:bg-gray-600">${ICONS.plus}</button>
+                                    ${isGM ? `<button onclick="dndApp.updateSpellSlot('total', 1)" class="p-1 bg-gray-700 rounded hover:bg-gray-600">${ICONS.plus}</button>` : ''}
                                 </div>
                             </div>
                             <div class="h-10 w-px bg-gray-700"></div>
@@ -792,9 +907,11 @@
                     <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
                         <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
                             <h3 class="text-lg font-bold text-gray-200">Grimoire</h3>
+                            ${isGM ? `
                             <button onclick="dndApp.openModal()" class="text-sm bg-purple-700 hover:bg-purple-600 text-white px-3 py-1.5 rounded flex items-center gap-1 transition-colors">
                                 ${ICONS.plus} Créer Sort
                             </button>
+                            ` : ''}
                         </div>
                         <div class="divide-y divide-gray-700 max-h-[500px] overflow-y-auto">
                             ${spells.length === 0 ? `<div class="p-8 text-center text-gray-500 italic">Aucun sort trouvé pour ce niveau.</div>` : ''}
@@ -804,7 +921,7 @@
                                 return `
                                     <div class="transition-colors ${isKnown ? 'bg-purple-900/10' : 'bg-transparent'}">
                                         <div class="p-3 flex items-center gap-3">
-                                            <input type="checkbox" ${isKnown ? 'checked' : ''} onchange="dndApp.toggleKnownSpell('${spell.id}')" class="w-5 h-5 rounded border-gray-600 text-purple-600 focus:ring-purple-500 bg-gray-700 accent-purple-600">
+                                            <input type="checkbox" ${isKnown ? 'checked' : ''} ${!isGM ? 'disabled' : ''} onchange="dndApp.toggleKnownSpell('${spell.id}')" class="w-5 h-5 rounded border-gray-600 text-purple-600 focus:ring-purple-500 bg-gray-700 accent-purple-600 disabled:opacity-50">
                                             <div class="flex-1 cursor-pointer" onclick="dndApp.toggleExpandSpell('${spell.id}')">
                                                 <div class="flex justify-between items-center">
                                                     <span class="font-medium ${isKnown ? 'text-purple-300' : 'text-gray-400'}">${spell.name}</span>
@@ -830,14 +947,16 @@
                 `;
             },
 
-            renderSkills(char) {
+            renderSkills(char, isGM) {
                 return `
                     <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
                         <h3 class="text-xl font-bold mb-4 flex items-center gap-2">Compétences</h3>
+                        ${isGM ? `
                         <div class="mb-6 flex gap-2">
                             <input id="new-skill-input" type="text" placeholder="Nouvelle compétence..." class="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500">
                             <button onclick="dndApp.addSkill()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded transition-colors">${ICONS.plus}</button>
                         </div>
+                        ` : ''}
                         <div class="space-y-2">
                             ${char.skills.length === 0 ? `<p class="text-gray-500 text-center py-4">Aucune compétence ajoutée.</p>` : ''}
                             ${char.skills.map(skill => `
@@ -846,9 +965,9 @@
                                     <div class="flex items-center gap-4">
                                         <div class="flex items-center gap-2 bg-gray-800 rounded px-2">
                                             <span class="text-xs text-gray-500 uppercase">Rangs</span>
-                                            <input type="number" value="${skill.ranks}" onchange="dndApp.updateSkillRank('${skill.id}', parseInt(this.value))" class="w-12 bg-transparent text-right font-mono text-white focus:outline-none">
+                                            <input type="number" value="${skill.ranks}" ${!isGM ? 'readonly' : ''} onchange="dndApp.updateSkillRank('${skill.id}', parseInt(this.value))" class="w-12 bg-transparent text-right font-mono text-white focus:outline-none">
                                         </div>
-                                        <button onclick="dndApp.removeSkill('${skill.id}')" class="text-gray-600 hover:text-red-400 transition-colors">${ICONS.x}</button>
+                                        ${isGM ? `<button onclick="dndApp.removeSkill('${skill.id}')" class="text-gray-600 hover:text-red-400 transition-colors">${ICONS.x}</button>` : ''}
                                     </div>
                                 </div>
                             `).join('')}
